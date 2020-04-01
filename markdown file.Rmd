@@ -1,0 +1,148 @@
+---
+###title: "Capstone Project- RECS Data"
+###author: "Rijul Jain"
+###date: "25/03/2020"
+###output: html_document
+---
+### Residential Energy Consumption Survey (RECS)
+
+The Residential Energy Consumption Survey is a periodic survey that is sponsored by the United States energy information administration. The first RECS survey occurred in 1978 and occurs every 4 years. The survey is a multi-year effort and comprises of three sub surveys. Firstly, the Household Survey that collects data on energy-related features and usage patterns of a nationally representative sample of housing units. Secondly,the Rental Agent Survey is a supplementary survey conducted for renters that do not directly pay for their energy usage. Thirdly,the Energy Supplier Surveys collect data on how much electricity, non-renewable resources were consumed in the sampled housing unit during the reference year. In addition to the energy data, Energy Supplier Surveys also collect data on actual dollar amount spent on energy resources. 
+
+#### Data availability and Usage
+
+The micro portion of the RECS dataset is publically available on https://www.eia.gov/consumption/residential/data/2009/. This micro-dataset is anonymized and has been made available to the public under the Open, Public, Electronic and Necessary (OPEN) Government Data Act,2017. This act was an amendment over Open Government Data Act,2013. Section four of this act requires government agencies to maintain and publish a comprehensive data inventory of all open government data assets in a machine-readable format in a structured at no cost and no restrictions. furthermore, microdata of this data inventory will be made available by the agencies for open data users and data advocates.
+
+#### About Dataset
+
+The RECS 2009 raw dataset increased threefold since 2005. The dataset comprises 940 dimensions and 12083 rows of which 359 dimensions are imputation indicators for the remaining 581 dimensions, which comprise of 7020223 data points. The missing values are due to unresponded questions of the survey as either the respondents didn’t know or refused to answer certain items on the survey. A hot-deck imputation methodology was employed to impute the missing values, this methodology fills in a missing value in two steps. Firstly, for each missing value a statistical model was selected and used to determine a set of related variables. These related variables were used to identify statistically similar cases, which filled the missing values with their own values. This type of imputation is potentially prone to bias which may lead to false conclusions. Furthermore, using the imputation indicator it was found that 329 dimensions were imputed at least once.Out of these 329 imputed dimensions, 10 imputed dimensions comprised of 37 percent of imputed values. Four of these dimensions are of ordinal type and the rest are of a discrete type. The total number of imputed cells in the dataset is 30891 which corresponds to 0.44 percent of imputation.
+
+
+The 2009 RECS allows for separate estimation for Census Divisions, Census Regions, 16 individual states, and remaining groups of states.To produce estimates for these geographies, the sample cases were weighted to represent the population and for the residences not in the sample. In RECS 2009 dataset,dimension NWEIGHT represents the final base sampling weight of the observation(housing unit) i.e. the size of the population that the particular observation represents. Base sampling weight is defined as the reciprocal of the probability of being selected for the RECS sample, were calculated for each sampled housing unit. The base weights of housing units were also adjusted to account for non-responsive surveys, furthermore, ratio adjustments were made to ensure that the RECS weights add up to estimated number of housing units by the Census Bureau for 2009. For example, if NWEIGHT for a household is 2,000 then that household represents itself and 1,999 other non-sampled households.  
+
+
+To complete the sampled housing units provfile the EIA gathered weather and a few geographic indicators from other government agencies. Average heating degree days and cooling degree-days (CDD) with the base temperature of 65F for 2009 and last 30 years were provided by the National Climate Data Center (NCDC) for each weather station in the U.S. Each sampled RECS housing unit was then matched to a local weather station in the then assigned the corresponding HDD and CDD values. In addition to this, EIA also matched two Census Bureau geographic categorical identifiers to each sampled housing unit namely Urban/Rural and Metropolitan/Micropolitan.
+
+
+#### Data extraction and Pre Processing
+
+```{r eval=FALSE} 
+#Reading data
+rawdata = read.csv("D:/capstone 2/recs2009_public.csv")
+
+```
+
+```{r eval=FALSE} 
+#Columns containing actual data i.e. columns named with "z%" not as the first character
+data <- select(rawdata,-starts_with("z"))
+#write.csv(data, 'D:/capstone 2/data.csv', row.names=T)
+```
+
+```{r eval=FALSE} 
+#Dimensions of the data
+Number_of_rows=nrow(data)
+Number_of_columns=ncol(data)
+
+print( paste("Number of rows: ", Number_of_rows),quote = FALSE)
+print( paste("Number of columns: ", Number_of_columns),quote = FALSE)
+```
+
+```{r eval=FALSE} 
+#Total number of cells
+total_cells=nrow(data)*ncol(data)
+print( paste("Total_cells in the data: ", total_cells),quote = FALSE)
+```
+
+
+
+```{r eval=FALSE} 
+#Imputed_indicator dimensions i.e. columns named with "z%" as the first character
+imputed_column <-select(rawdata,starts_with("z"))
+#write.csv(imputed_column, 'D:/capstone 2/imputed_indicator.csv', row.names=T)
+```
+
+
+
+
+
+```{r eval=FALSE} 
+# count of impution per dimension 
+imputed_features<-colSums(imputed_column)
+imputed_features<-data.frame(imputed_features)
+names(imputed_features)= c("count_of_imputation")
+View(imputed_features)
+```
+
+```{r eval=FALSE} 
+#Total count of imputed_cells
+total_imputation=colSums(imputed_features)
+print( paste("Total_imputated_cells ", total_imputation),quote = FALSE)
+```
+
+
+
+```{r eval=FALSE} 
+#Percent of imputation
+percentage=total_imputation/total_cells*100
+print( paste("Percentage of imputed cells ", percentage),quote = FALSE)
+```
+
+
+
+```{r eval=FALSE} 
+#Extracting imputed column names by converting rownames_to_character vector
+imputed_column_names<-data.frame(as.character(rownames(imputed_features)),imputed_features)
+```
+
+```{r eval=FALSE} 
+#Deleteing column names with 0 missing cells
+
+imputed_column_names<-imputed_column_names[imputed_column_names[,"count_of_imputation"] != 0,]
+colnames(imputed_column_names)[1]="column_name"
+```
+
+```{r eval=FALSE} 
+#Reading metadata dataframe_for_variable_definition, label_and_code
+metadata = read.csv("D:/capstone 2/metadata.csv")
+names(metadata)<- c("variable_name","variable_description","codes","label")
+```
+
+```{r eval=FALSE} 
+#selecting imputed column defination
+library("sqldf")
+Extracting_actual_column_names<- sqldf("select variable_description,count_of_imputation \t
+                        FROM metadata join imputed_column_names ON\t
+                        variable_name=column_name")
+names(Extracting_actual_column_names)= c("column_name","count_of_imp")
+
+Extracting_variable_description<- sqldf("select variable_name,count_of_imp,label,codes\t
+                        FROM metadata join Extracting_actual_column_names ON\t
+                        variable_name=column_name")
+```
+
+```{r eval=FALSE} 
+#Sorting count of imputed columns based on count of imputed cells
+Extracting_variable_description <- Extracting_variable_description[with(Extracting_variable_description, order(-count_of_imp)), ]
+
+
+```
+
+```{r eval=FALSE} 
+#Total number of imputed columns 
+
+print( paste("Number of Imputed Columns: ", nrow(Extracting_variable_description)))
+```
+
+#### Data Exploration
+
+```{r eval=FALSE} 
+#Regionwise kwh consumption
+library(sqldf)
+sqldf("select sum(kwh) from data where REGIONC=1")
+```
+
+
+
+
+
+
+
